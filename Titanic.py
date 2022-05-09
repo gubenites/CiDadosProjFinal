@@ -78,10 +78,16 @@ import seaborn as sns                                                           
 import matplotlib.pyplot as plt                                                                                                             # Biblioteca para plotar gráficos
 import missingno as mn                                                                                                                      # Biblioteca para ver missing values de uma maneira interessante
 from pycaret.utils import enable_colab                                                                                                      # Modo que habilita o uso do Carte no Colab do Google
-from pycaret.classification import *                                                                                                        # Biblioetca que permite vároas análises de classificação
+from pycaret.classification import *                                                                                                        # Biblioetca que permite várias análises de classificação
+import pprint as pp                                                                                                                         # Bbiblioteca que organiza print
+from sklearn.ensemble import RandomForestClassifier                                                                                         # Random Forest
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
+from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
+from sklearn.model_selection import cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
 
 # Habilita um modo de funcionamento do py.caret caso use o colab
-enable_colab()
+# enable_colab()
 
 # Clock inicio código
 Start_Time = time.monotonic()
@@ -202,13 +208,13 @@ full.describe()
 # Gráficos e tabelas que ajudam a entender as variáveis numéricas da base de dados train
 
 # Plota histograma das variáveis categóricas
-for g in train_num.columns:
-    plt.hist(train_num[g])                                                                                                                  # Prepara o histograma da variável
-    plt.title(g)                                                                                                                            # Define que o titulo do histograma é o nome da variável 
-    plt.show()                                                                                                                              # Plota de fato os gráficos
+# for g in train_num.columns:
+#     plt.hist(train_num[g])                                                                                                                  # Prepara o histograma da variável
+#     plt.title(g)                                                                                                                            # Define que o titulo do histograma é o nome da variável 
+#     plt.show()                                                                                                                              # Plota de fato os gráficos
 
 # Cria tabela de correlação entre as variáveis em heatmap
-print(train_num.corr())                                                                                                                     # Mostra tabela com valores das correlações entre as variáveis
+# print(train_num.corr())                                                                                                                     # Mostra tabela com valores das correlações entre as variáveis
 sns.heatmap(train_num.corr())                                                                                                               # Plota tabela com usando cores em gradient para definir grau de correlação
 
 # Cria tabela da média de cada variável numérica caso a pessoa tenha sobrevivido ou não
@@ -218,17 +224,17 @@ surv_table_num = (train >>
         Mean_SibSp = mean(X.SibSp),
         Mean_Parch = mean(X.Parch),
         Mean_Fare = mean(X.Fare)))
-print(surv_table_num)
+# print(surv_table_num)
 
 
 ## 4.2 Análise descritiva variáveis categóricas da base train
 # Gráficos e tabelas que ajudam a entender as variáveis categoricas da base de dados train
 
 # Cria gráficos que comparam a contagem de dados váildos por categoria
-for c in train_cat.columns:
-    sns.barplot(train_cat[c].value_counts().index,
-        train_cat[c].value_counts()).set_title(c)
-    plt.show()\
+# for c in train_cat.columns:
+#     sns.barplot(train_cat[c].value_counts().index,
+#         train_cat[c].value_counts()).set_title(c)
+#     plt.show()\
 
 # Cria tabela da média de cada variável numérica caso a pessoa tenha sobrevivido ou não
 surv_table_Pclass = pd.pivot_table(train, 
@@ -256,13 +262,13 @@ surv_table_Title = pd.pivot_table(train,
                     aggfunc ="count")
 
 # Printa as tabelas com as agregações feitas anteriormente
-print(surv_table_Pclass)
-print()
-print(surv_table_Sex)
-print()
-print(surv_table_Embarked)
-print()
-print(surv_table_Title)
+# print(surv_table_Pclass)
+# print()
+# print(surv_table_Sex)
+# print()
+# print(surv_table_Embarked)
+# print()
+# print(surv_table_Title)
 
 # Contagem de pessoas por título
 surv_table_title = (full >>
@@ -317,12 +323,43 @@ full = (full >>
             Norm_parch = np.log(full.Parch + 1),                                                                                            # Cria uma nova coluna normalizada da quantidade de filhos ou país a bordo
             Norm_fare = np.log(full.Fare + 1)))                                                                                             # Cria uma coluna normalizada do preço pago para a viagem
 
+# Função que cria coluna com valor de linha contendo 1 como default
+def create_title_column(row, column):
+    row[(row[column]).title()] = 1
+    
+    return row
+
+# Função que substitui os valores de embarked por numericos
+def assign_values(row, dict_labels):
+    row['Embarked'] = dict_labels[row['Embarked']]
+    
+    return row
+
+# Aqui aplicamos a função previamente mencionada (assign_values) no dataframe e substituimos por n.a os outros valores achados como unicos na coluna
+for column in ['Title', 'Cabin_adv', 'Sex']:
+    full = full.apply(lambda row: create_title_column(row, column), axis = 1)
+
+    for title in list(full[column].unique()):
+        full[title.title()] = full[title.title()].fillna(0)
+
+# Criamos um dict de de(string)-para(numerico) para as variaveis em Embarked
+dict_labels = {
+    full['Embarked'].unique()[iter_label] : iter_label for iter_label in range(len(list(full['Embarked'].unique())))
+}
+
+# Aplicamos a função assign_values
+full = full.apply(lambda row: assign_values(row, dict_labels), axis = 1)
+
+# Dropamos as colunas não numericas
+for drop_col in ['Title', 'Cabin_adv', 'Sex', 'Cabin', 'Cabin_mult', 'Letter_ticket', 'Name', 'NameComplete', 'Surname', 'Ticket']:
+    full = full.drop(drop_col, 1)
+
 ## 4.4 Finalizar trabalho na base full
 # Salva um conjunto de dummies
-Dummies = pd.get_dummies(full
-    [["Pclass", "Sex", "Age", "SibSp", 
-    "Parch", "Norm_fare","Embarked","Cabin_adv",
-    "Cabin_mult", "Num_ticket", "Title", "Train"]])
+# Dummies = pd.get_dummies(full
+#     [["Pclass", "Sex", "Age", "SibSp", 
+#     "Parch", "Norm_fare","Embarked","Cabin_adv",
+#     "Cabin_mult", "Num_ticket", "Title", "Train"]])
 
 # Faz uma última checagem se há algo que ainda precise de algum tipo de tratamento
 mn.matrix(full)
@@ -341,140 +378,149 @@ print("04. Análise Descritiva | OK")
 print(f"Duration: {timedelta(seconds = end_time - start_time)}")
 print(" ")
 
-
-
 # --------------------------------------------------------------- 05. MODELO ---------------------------------------------------------------
 
-
-
 # Clock inicio etapa
 start_time = time.monotonic()
 
-# Escolhe algumas colunas que podem fazer parte do modelo
-train_selected = (train >>                                                                                                                  # (Separado do train, pois parece que tinha algum bug no caret que considerava mesmo colunas nao selecionadas)
-                select(X.Embarked,
-                    X.Title,
-                    X.Age,
-                    X.Norm_fare,
-                    X.Norm_sibsp,
-                    X.Norm_parch,
-                    X.Survived))
+#criamos uma copia do treino
+cp_train = train.copy()
 
-# Escolha de quais variáveis serão utilizadas e consideradas como categoricas
-train_cat = (train_selected >>
-            select(X.Embarked,
-                X.Title))
+# Aqui é feito o random forest para vermos quais as variaveis mais importantes do modelo
+rf = RandomForestClassifier(n_estimators=50, max_features='sqrt')
+survived = cp_train['Survived']
+cp_train = cp_train.drop('Survived',axis = 1)
+rf = rf.fit(cp_train, survived)
 
-# Escolha de quais variáveis serão utilizadas e consideradas como numéricas
-train_num = (train_selected >>
-            select(X.Age,
-                X.Norm_fare,
-                X.Norm_sibsp,
-                X.Norm_parch))
+# Criamos um dataframe para alocar os resultados
+rf_df = pd.DataFrame()
 
-# Ajusta os parâmetros para uso do classificador Caret (Não esqueça de responder que ta tudo ok pro caret apertando ENTER)
-clf1 = setup(data = train_selected 
-            ,target = "Survived"
-            ,categorical_features = list(train_cat.columns)                                                                                 # Para realizar One-Hot enconding de variáveis strings
-            ,numeric_features = list(train_num.columns)                                                                                     # Variábveis núméricas para o modelo
-            ,fix_imbalance = False                                                                                                          # Tratar desbalanceamento das classes
-            ,remove_outliers = False                                                                                                        # Remoção de outliers
-            ,normalize = True                                                                                                               # Normalização de variaveis numéricas
-            ,feature_interaction = False                                                                                                    # Criação de novas features ao unir variáveis numéricas
-            ,feature_selection = False                                                                                                      # Seleção de features relevantes para o modelo
-            ,remove_multicollinearity = False                                                                                               # Remoção de colinearidade
-            )
+# Criamos as colunas Count que possui a relevancia de cada variavel alvo e Values que possui o nome de cada coluna
+rf_df['Count'] = rf.feature_importances_
+rf_df['Values'] = cp_train.columns
 
-# Compara os modelos e seleciona qual tem melhores indicadores
-best_model = compare_models()
-print(best_model)
+# Fazemos um sort para vermos as mais relevantes e setamos o index do dataframe para o nome da propria coluna
+rf_df = rf_df.sort_values(by=['Count'], ascending = True)
+rf_df = rf_df.set_index('Values')
 
-# Seleciona um dos modelos (provavelmente o com melhores indicadores na comparação anterior)
-model_rf = create_model("lr")                                                                                                              # 
+rf_df.plot(kind = 'barh')
 
-# Tuna o modelo
-tuned_best_model = tune_model(best_model)
+# Validação cruzada entre diferentes tipos de modelos
+for model in [LogisticRegression(), RandomForestClassifier(), GradientBoostingClassifier(), KNeighborsClassifier(), LogisticRegressionCV()]:
+    print('* ----------------------------------------------------------------------------------- *')
+    print('  Validação cruzada de: {}'.format(model.__class__))
+    print('  Cross Score: {}'.format(np.mean(cross_val_score(model, cp_train, survived, cv = 4, scoring='accuracy'))))
+    print('* ----------------------------------------------------------------------------------- *')
+    print()
 
-# Faz matriz confusão para avaliar o modelo tunado
-plot_model(tuned_best_model, plot = 'confusion_matrix')
+# # Escolhe algumas colunas que podem fazer parte do modelo
+# train_selected = (train >>                                                                                                                  # (Separado do train, pois parece que tinha algum bug no caret que considerava mesmo colunas nao selecionadas)
+#                 select(X.Embarked,
+#                     X.Title,
+#                     X.Age,
+#                     X.Norm_fare,
+#                     X.Norm_sibsp,
+#                     X.Norm_parch,
+#                     X.Survived))
 
-# Escolhe como modelo final o modelo tunado
-final_model = finalize_model(tuned_best_model)
-print(final_model)
+# # Escolha de quais variáveis serão utilizadas e consideradas como categoricas
+# train_cat = (train_selected >>
+#             select(X.Embarked,
+#                 X.Title))
 
-# Faz a predição do modelo final no teste
-predict_model(final_model, test)
+# # Escolha de quais variáveis serão utilizadas e consideradas como numéricas
+# train_num = (train_selected >>
+#             select(X.Age,
+#                 X.Norm_fare,
+#                 X.Norm_sibsp,
+#                 X.Norm_parch))
 
-# Plota gráfico para realizar interpretação do modelo final
-interpret_model(final_model)
-
-# Outra visualização do modelof inal
-interpret_model(final_model, plot = 'reason', observation = 1)
-
-
-
-
-
-
-
-
-
+# # Ajusta os parâmetros para uso do classificador Caret (Não esqueça de responder que ta tudo ok pro caret apertando ENTER)
+# print("Entrando no modelo")
+# clf1 = setup(data = train_selected 
+#             ,target = "Survived"
+#             ,categorical_features = list(train_cat.columns)                                                                                 # Para realizar One-Hot enconding de variáveis strings
+#             ,numeric_features = list(train_num.columns)                                                                                     # Variábveis núméricas para o modelo
+#             ,fix_imbalance = False                                                                                                          # Tratar desbalanceamento das classes
+#             ,remove_outliers = False                                                                                                        # Remoção de outliers
+#             ,normalize = True                                                                                                               # Normalização de variaveis numéricas
+#             ,feature_interaction = False                                                                                                    # Criação de novas features ao unir variáveis numéricas
+#             ,feature_selection = False                                                                                                      # Seleção de features relevantes para o modelo
+#             ,remove_multicollinearity = False                                                                                               # Remoção de colinearidade
+#             )
+        
+# print("Saindo do modelo")
 
 
+# # Compara os modelos e seleciona qual tem melhores indicadores
+# best_model = compare_models()
+# print(best_model)
+
+# # Seleciona um dos modelos (provavelmente o com melhores indicadores na comparação anterior)
+# model_rf = create_model("lr")                                                                                                              # 
+
+# # Tuna o modelo
+# tuned_best_model = tune_model(best_model)
+
+# # Faz matriz confusão para avaliar o modelo tunado
+# plot_model(tuned_best_model, plot = 'confusion_matrix')
+
+# # Escolhe como modelo final o modelo tunado
+# final_model = finalize_model(tuned_best_model)
+# print(final_model)
+
+# # Faz a predição do modelo final no teste
+# predict_model(final_model, test)
+
+# # Plota gráfico para realizar interpretação do modelo final
+# interpret_model(final_model)
+
+# # Outra visualização do modelof inal
+# interpret_model(final_model, plot = 'reason', observation = 1)
+
+# # Clock fim etapa
+# end_time = time.monotonic()
+# print("05. Modelo | OK")
+# print(f"Duration: {timedelta(seconds = end_time - start_time)}")
+# print(" ")
 
 
 
+# # ------------------------------------------------------------ 99. SALVA ARQUIVO -----------------------------------------------------------
 
 
 
+# # Clock inicio etapa
+# start_time = time.monotonic()
 
+# # Salva o progresso
+# with pd.ExcelWriter(Titanic_file) as writer:  
+#     train.to_excel(writer, sheet_name = "train")
+#     test.to_excel(writer, sheet_name = "test")
+#     full.to_excel(writer, sheet_name = "full")
+#     train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
+#     surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
 
+# # Salva o progresso em um arquivo de segurança
+# with pd.ExcelWriter(Titanic_copy) as writer:  
+#     train.to_excel(writer, sheet_name = "train")
+#     test.to_excel(writer, sheet_name = "test")
+#     full.to_excel(writer, sheet_name = "full")
+#     train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
+#     surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
 
+# # Clock fim etapa
+# end_time = time.monotonic()
+# print("99. Salva arquivo | OK")
+# print(f"Duration: {timedelta(seconds = end_time - start_time)}")
+# print(" ")
 
-
-# Clock fim etapa
-end_time = time.monotonic()
-print("05. Modelo | OK")
-print(f"Duration: {timedelta(seconds = end_time - start_time)}")
-print(" ")
-
-
-
-# ------------------------------------------------------------ 99. SALVA ARQUIVO -----------------------------------------------------------
-
-
-
-# Clock inicio etapa
-start_time = time.monotonic()
-
-# Salva o progresso
-with pd.ExcelWriter(Titanic_file) as writer:  
-    train.to_excel(writer, sheet_name = "train")
-    test.to_excel(writer, sheet_name = "test")
-    full.to_excel(writer, sheet_name = "full")
-    train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
-    surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
-
-# Salva o progresso em um arquivo de segurança
-with pd.ExcelWriter(Titanic_copy) as writer:  
-    train.to_excel(writer, sheet_name = "train")
-    test.to_excel(writer, sheet_name = "test")
-    full.to_excel(writer, sheet_name = "full")
-    train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
-    surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
-
-# Clock fim etapa
-end_time = time.monotonic()
-print("99. Salva arquivo | OK")
-print(f"Duration: {timedelta(seconds = end_time - start_time)}")
-print(" ")
-
-# Clock fim código
-End_Time = time.monotonic()
-print("--------------------------")
-print("Fim do Código")
-print(f"Code Duration: {timedelta(seconds = End_Time - Start_Time)}")
-print("--------------------------")
+# # Clock fim código
+# End_Time = time.monotonic()
+# print("--------------------------")
+# print("Fim do Código")
+# print(f"Code Duration: {timedelta(seconds = End_Time - Start_Time)}")
+# print("--------------------------")
 
 
 
