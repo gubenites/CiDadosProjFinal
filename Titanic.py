@@ -85,6 +85,12 @@ from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.datasets import make_blobs
+from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
 
 # Habilita um modo de funcionamento do py.caret caso use o colab
 # enable_colab()
@@ -116,6 +122,8 @@ train_file = wdir + inputs_path + "train.csv"                                   
 test_file = wdir + inputs_path + "test.csv"                                                                                                 # Nome do arquivo de teste
 Titanic_copy = wdir + result_path + "Titanic_" + Version_save + ".xlsx"                                                                     # Nome do arquivo de cópia de segurança
 Titanic_file =  wdir + inputs_path + "Titanic.xlsx"                                                                                         # Nome do arquivo de resultado
+results_file =  wdir + inputs_path + "gender_submission.csv"
+
 
 # Indica etapa do processo como concluida
 print("02. Cockpit | OK")
@@ -135,8 +143,9 @@ train = (pd.read_csv(train_file) >>                                             
 
 # Cria base de dados que contem o conjunto de teste e faz algumas transformações
 test = (pd.read_csv(test_file) >>                                                                                                           # Le o arquivo de csv
-        mutate(Train = 0,
-            Survived = None))                                                                                                               # Cria uma coluna que indentifica se o arquivo é de treino
+        mutate(Train = 0))                                                                                                               # Cria uma coluna que indentifica se o arquivo é de treino
+
+test_results_column = pd.read_csv(results_file)['Survived']
 
 # Cria uma base de dados que junta as base de dados e faz transformações
 full = (train >>
@@ -372,6 +381,9 @@ train = (full >>
 test = (full >>
         mask(X.Train == 0))
 
+test_survived = test['Survived']
+test = test.drop('Survived', axis = 1)
+
 # Clock fim etapa
 end_time = time.monotonic()
 print("04. Análise Descritiva | OK")
@@ -405,127 +417,166 @@ rf_df = rf_df.set_index('Values')
 
 rf_df.plot(kind = 'barh')
 
+# Aqui sera abrigado o resultado da cross validation
+dict_scores = {}
+
+# Inicializamos todos os modelos e colocamos cada um deles dentro de uma lista
+models_list = [LogisticRegression(), RandomForestClassifier(), GradientBoostingClassifier(), KNeighborsClassifier()]
+
 # Validação cruzada entre diferentes tipos de modelos
-for model in [LogisticRegression(), RandomForestClassifier(), GradientBoostingClassifier(), KNeighborsClassifier(), LogisticRegressionCV()]:
+for model in models_list:
+    result = np.mean(cross_val_score(model, cp_train, survived, cv = 4, scoring='accuracy'))
     print('* ----------------------------------------------------------------------------------- *')
     print('  Validação cruzada de: {}'.format(model.__class__))
-    print('  Cross Score: {}'.format(np.mean(cross_val_score(model, cp_train, survived, cv = 4, scoring='accuracy'))))
+    print('  Cross Score: {}'.format(result))
     print('* ----------------------------------------------------------------------------------- *')
     print()
+    dict_scores['{}'.format(model)] = result
 
-# # Escolhe algumas colunas que podem fazer parte do modelo
-# train_selected = (train >>                                                                                                                  # (Separado do train, pois parece que tinha algum bug no caret que considerava mesmo colunas nao selecionadas)
-#                 select(X.Embarked,
-#                     X.Title,
-#                     X.Age,
-#                     X.Norm_fare,
-#                     X.Norm_sibsp,
-#                     X.Norm_parch,
-#                     X.Survived))
+print("O modelo escolhido pelo cross validation para ser utilizado foi o : {}".format(max(dict_scores, key = dict_scores.get)))
+print("Começando tuning do modelo..")
 
-# # Escolha de quais variáveis serão utilizadas e consideradas como categoricas
-# train_cat = (train_selected >>
-#             select(X.Embarked,
-#                 X.Title))
+# Selecionamos o modelo que obteve o melhor resultado no cross score
+final_model = max(dict_scores, key = dict_scores.get)
 
-# # Escolha de quais variáveis serão utilizadas e consideradas como numéricas
-# train_num = (train_selected >>
-#             select(X.Age,
-#                 X.Norm_fare,
-#                 X.Norm_sibsp,
-#                 X.Norm_parch))
+# Aqui iremos fazer um hyperparameter tuning para os modelos que em media obtiveram maior acertividade (Regressão Linear e Random Forest)
+if final_model == 'LogisticRegression()':
+    final_model = models_list[0]
+    
+    # Aqui temos os tipos de solver sem ser sag e saga para distribuições lineares que iremos variar em nosso gri search
+    solvers = ['newton-cg', 'lbfgs', 'liblinear']
 
-# # Ajusta os parâmetros para uso do classificador Caret (Não esqueça de responder que ta tudo ok pro caret apertando ENTER)
-# print("Entrando no modelo")
-# clf1 = setup(data = train_selected 
-#             ,target = "Survived"
-#             ,categorical_features = list(train_cat.columns)                                                                                 # Para realizar One-Hot enconding de variáveis strings
-#             ,numeric_features = list(train_num.columns)                                                                                     # Variábveis núméricas para o modelo
-#             ,fix_imbalance = False                                                                                                          # Tratar desbalanceamento das classes
-#             ,remove_outliers = False                                                                                                        # Remoção de outliers
-#             ,normalize = True                                                                                                               # Normalização de variaveis numéricas
-#             ,feature_interaction = False                                                                                                    # Criação de novas features ao unir variáveis numéricas
-#             ,feature_selection = False                                                                                                      # Seleção de features relevantes para o modelo
-#             ,remove_multicollinearity = False                                                                                               # Remoção de colinearidade
-#             )
-        
-# print("Saindo do modelo")
+    # Penalty sera unica (apesar de existir outras opções, o l2 abrange todos os tipos de solver para este modelo)
+    penalty = ['l2']
 
+    # Aqui mostramos as opções de C (cross-product)
+    c_values = [100, 10, 1.0, 0.1, 0.01]
 
-# # Compara os modelos e seleciona qual tem melhores indicadores
-# best_model = compare_models()
-# print(best_model)
+    # Numero maximo de iterações feito de forma ao modelo não dar erro de numero maximo de iterações alcançado
+    max_iter = [6000]
 
-# # Seleciona um dos modelos (provavelmente o com melhores indicadores na comparação anterior)
-# model_rf = create_model("lr")                                                                                                              # 
+    # Aqui é feito o dict com as configurações previamente citadas
+    grid = dict(solver=solvers,penalty=penalty,C=c_values, max_iter = max_iter)
 
-# # Tuna o modelo
-# tuned_best_model = tune_model(best_model)
+    # Inicializamos um RepeatedStratifiedKFold
+    cv = RepeatedStratifiedKFold(n_splits=15, n_repeats=4, random_state=1)
+    
+    # Aqui jogamos o RepeatedStratifiedKFold junto com nosso dict de configurações para o modelo e começamos a variar suas entradas
+    grid_search = GridSearchCV(estimator=final_model, param_grid=grid, n_jobs=-1, cv=cv, scoring='accuracy',error_score=0)
+    grid_result = grid_search.fit(cp_train, survived)
 
-# # Faz matriz confusão para avaliar o modelo tunado
-# plot_model(tuned_best_model, plot = 'confusion_matrix')
+    print("Melhor acerto: {} utilizando {}".format(grid_result.best_score_, grid_result.best_params_))
 
-# # Escolhe como modelo final o modelo tunado
-# final_model = finalize_model(tuned_best_model)
-# print(final_model)
+    # É feito o predict
+    predict = grid_result.predict(test)
 
-# # Faz a predição do modelo final no teste
-# predict_model(final_model, test)
+    # Aqui é feito um class report e uma matriz confusão para sabermos quão bem nosso modelo desempenhou
+    print("Clas Report Output: ")
+    clas_report = classification_report(list(test_results_column), predict)
+    conf_matrix = confusion_matrix(list(test_results_column),predict)
 
-# # Plota gráfico para realizar interpretação do modelo final
-# interpret_model(final_model)
+    pp.pprint(clas_report)
+    print()
+    print("Confusion Matrix Output: ")
+    pp.pprint(conf_matrix)
+    print()
 
-# # Outra visualização do modelof inal
-# interpret_model(final_model, plot = 'reason', observation = 1)
+    test['Survived'] = list(predict)
 
-# # Clock fim etapa
-# end_time = time.monotonic()
-# print("05. Modelo | OK")
-# print(f"Duration: {timedelta(seconds = end_time - start_time)}")
-# print(" ")
+if final_model == 'RandomForestClassifier()':
+    final_model = models_list[1]
+    
+    # Criamos um vetor que vai de 100 a 1500 variando de 10 em 10 para ser utilizado no campo estimators
+    estimators = [int(x) for x in np.linspace(start = 100,stop = 1500,num = 10)]
 
+    # Aqui mostramos as features utilziadas no modelo que irao variar em nosso RandomizedSearch
+    features = ['auto','sqrt']
 
+    # Criamos um vetor que vai de 5 a 120 variando de 10 em 10
+    depth = [int(x) for x in np.linspace(start = 5,stop = 120,num = 10)]
+
+    # Lista que mostra valor de split maximo para a arvore
+    split = [2, 5, 10]
+
+    # Lista que mostra numero de folhas maximo para a arvore
+    leafs = [1,2,4]
+
+    # Lista para variar modelo com e sem bootstrap
+    bootstrap = [True, False]
+
+    # Grid com configurações previamente criadas para ser utilizada como parametro do modelo no RandomizedSearchCV
+    grid = {
+        'n_estimators' : estimators,
+        'max_features' : features,
+        'max_depth' : depth,
+        'min_samples_split' : split,
+        'min_samples_leaf' : leafs,
+        'bootstrap' : bootstrap
+    }
+
+    # Aqui é feita a variação dos parametros do modelo de forma a ser encontrados os parametros que geram a melhor resposta 
+    rf_grid = RandomizedSearchCV(estimator = final_model, param_distributions = grid, n_iter = 100, cv = 4, verbose = 2, random_state = 1, n_jobs = -1)
+    rf_grid.fit(cp_train, survived)
+
+    print("Melhor acerto: {} usando {}".format(rf_grid.best_score_, rf_grid.best_params_))
+
+    # Feito o predict na base de teste
+    predict = rf_grid.predict(test)
+
+    # Aqui é feito um class report e uma matriz confusão para sabermos quão bem nosso modelo desempenhou
+    print("Clas Report Output: ") 
+    clas_report = classification_report(list(test_results_column), predict)
+    conf_matrix = confusion_matrix(list(test_results_column),predict)
+
+    pp.pprint(clas_report)
+    print()
+    print("Confusion Matrix Output: ")
+    pp.pprint(conf_matrix)
+    print()
+
+    test['Survived'] = list(predict)
+
+# Clock fim etapa
+end_time = time.monotonic()
+print("05. Modelo | OK")
+print(f"Duration: {timedelta(seconds = end_time - start_time)}")
+print(" ")
 
 # # ------------------------------------------------------------ 99. SALVA ARQUIVO -----------------------------------------------------------
 
 
 
-# # Clock inicio etapa
-# start_time = time.monotonic()
+# Clock inicio etapa
+start_time = time.monotonic()
 
-# # Salva o progresso
-# with pd.ExcelWriter(Titanic_file) as writer:  
-#     train.to_excel(writer, sheet_name = "train")
-#     test.to_excel(writer, sheet_name = "test")
-#     full.to_excel(writer, sheet_name = "full")
-#     train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
-#     surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
+# Salva o progresso
+with pd.ExcelWriter(Titanic_file) as writer:  
+    train.to_excel(writer, sheet_name = "train")
+    test.to_excel(writer, sheet_name = "test")
+    full.to_excel(writer, sheet_name = "full")
+    train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
+    surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
 
-# # Salva o progresso em um arquivo de segurança
-# with pd.ExcelWriter(Titanic_copy) as writer:  
-#     train.to_excel(writer, sheet_name = "train")
-#     test.to_excel(writer, sheet_name = "test")
-#     full.to_excel(writer, sheet_name = "full")
-#     train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
-#     surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
+# Salva o progresso em um arquivo de segurança
+with pd.ExcelWriter(Titanic_copy) as writer:  
+    train.to_excel(writer, sheet_name = "train")
+    test.to_excel(writer, sheet_name = "test")
+    full.to_excel(writer, sheet_name = "full")
+    train_num.corr().to_excel(writer, sheet_name = "train_num_corr")
+    surv_table_num.to_excel(writer, sheet_name = "surv_table_num")
 
-# # Clock fim etapa
-# end_time = time.monotonic()
-# print("99. Salva arquivo | OK")
-# print(f"Duration: {timedelta(seconds = end_time - start_time)}")
-# print(" ")
+# Clock fim etapa
+end_time = time.monotonic()
+print("99. Salva arquivo | OK")
+print(f"Duration: {timedelta(seconds = end_time - start_time)}")
+print(" ")
 
-# # Clock fim código
-# End_Time = time.monotonic()
-# print("--------------------------")
-# print("Fim do Código")
-# print(f"Code Duration: {timedelta(seconds = End_Time - Start_Time)}")
-# print("--------------------------")
-
-
-
-
-
+# Clock fim código
+End_Time = time.monotonic()
+print("--------------------------")
+print("Fim do Código")
+print(f"Code Duration: {timedelta(seconds = End_Time - Start_Time)}")
+print("--------------------------")
 
 
 # --------------------------------------------------------------- 00. ESBOÇO ---------------------------------------------------------------
