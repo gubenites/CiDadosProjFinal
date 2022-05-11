@@ -217,13 +217,13 @@ full.describe()
 # Gráficos e tabelas que ajudam a entender as variáveis numéricas da base de dados train
 
 # Plota histograma das variáveis categóricas
-# for g in train_num.columns:
-#     plt.hist(train_num[g])                                                                                                                  # Prepara o histograma da variável
-#     plt.title(g)                                                                                                                            # Define que o titulo do histograma é o nome da variável 
-#     plt.show()                                                                                                                              # Plota de fato os gráficos
+for g in train_num.columns:
+    plt.hist(train_num[g])                                                                                                                  # Prepara o histograma da variável
+    plt.title(g)                                                                                                                            # Define que o titulo do histograma é o nome da variável 
+    plt.show()                                                                                                                              # Plota de fato os gráficos
 
 # Cria tabela de correlação entre as variáveis em heatmap
-# print(train_num.corr())                                                                                                                     # Mostra tabela com valores das correlações entre as variáveis
+print(train_num.corr())                                                                                                                     # Mostra tabela com valores das correlações entre as variáveis
 sns.heatmap(train_num.corr())                                                                                                               # Plota tabela com usando cores em gradient para definir grau de correlação
 
 # Cria tabela da média de cada variável numérica caso a pessoa tenha sobrevivido ou não
@@ -233,17 +233,17 @@ surv_table_num = (train >>
         Mean_SibSp = mean(X.SibSp),
         Mean_Parch = mean(X.Parch),
         Mean_Fare = mean(X.Fare)))
-# print(surv_table_num)
+print(surv_table_num)
 
 
 ## 4.2 Análise descritiva variáveis categóricas da base train
 # Gráficos e tabelas que ajudam a entender as variáveis categoricas da base de dados train
 
 # Cria gráficos que comparam a contagem de dados váildos por categoria
-# for c in train_cat.columns:
-#     sns.barplot(train_cat[c].value_counts().index,
-#         train_cat[c].value_counts()).set_title(c)
-#     plt.show()\
+for c in train_cat.columns:
+    sns.barplot(train_cat[c].value_counts().index,
+        train_cat[c].value_counts()).set_title(c)
+    plt.show()\
 
 # Cria tabela da média de cada variável numérica caso a pessoa tenha sobrevivido ou não
 surv_table_Pclass = pd.pivot_table(train, 
@@ -271,13 +271,13 @@ surv_table_Title = pd.pivot_table(train,
                     aggfunc ="count")
 
 # Printa as tabelas com as agregações feitas anteriormente
-# print(surv_table_Pclass)
-# print()
-# print(surv_table_Sex)
-# print()
-# print(surv_table_Embarked)
-# print()
-# print(surv_table_Title)
+print(surv_table_Pclass)
+print()
+print(surv_table_Sex)
+print()
+print(surv_table_Embarked)
+print()
+print(surv_table_Title)
 
 # Contagem de pessoas por título
 surv_table_title = (full >>
@@ -363,13 +363,6 @@ full = full.apply(lambda row: assign_values(row, dict_labels), axis = 1)
 for drop_col in ['Title', 'Cabin_adv', 'Sex', 'Cabin', 'Cabin_mult', 'Letter_ticket', 'Name', 'NameComplete', 'Surname', 'Ticket']:
     full = full.drop(drop_col, 1)
 
-## 4.4 Finalizar trabalho na base full
-# Salva um conjunto de dummies
-# Dummies = pd.get_dummies(full
-#     [["Pclass", "Sex", "Age", "SibSp", 
-#     "Parch", "Norm_fare","Embarked","Cabin_adv",
-#     "Cabin_mult", "Num_ticket", "Title", "Train"]])
-
 # Faz uma última checagem se há algo que ainda precise de algum tipo de tratamento
 mn.matrix(full)
 
@@ -386,6 +379,8 @@ test = test.drop('Survived', axis = 1)
 
 # Clock fim etapa
 end_time = time.monotonic()
+
+print()
 print("04. Análise Descritiva | OK")
 print(f"Duration: {timedelta(seconds = end_time - start_time)}")
 print(" ")
